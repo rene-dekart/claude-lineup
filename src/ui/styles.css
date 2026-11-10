@@ -1,0 +1,953 @@
+/*
+ * Design system: Linear. Dark is the canonical surface, neutrals carry the UI,
+ * one violet accent used as punctuation, a 32px row rhythm, hairline borders,
+ * no shadows, 150ms eased motion.
+ *
+ * One token layer of semantic roles per theme, not the reference's
+ * primitive → semantic → component stack: a primitive layer here would be a
+ * second name for the same hex, and a component layer would have exactly one
+ * consumer per token. Add either when a second brand or a Figma/token sync
+ * makes them earn their keep. Status colors (add/del/warn) stay literal for
+ * the same reason — nothing else indexes into them.
+ */
+
+:root {
+  color-scheme: dark;
+  --bg: #08090a;
+  --panel: #0f1011;
+  --panel-2: #15161a;
+  --border: #21232a;
+  --border-strong: #2e313a;
+  --text: #e8e9ea;
+  --muted: #8a8f98;
+  --accent: #5e6ad2;
+  --accent-fg: #fff;
+  --accent-soft: rgba(94, 106, 210, 0.16);
+  --add: #4cb782;
+  --add-bg: rgba(76, 183, 130, 0.13);
+  --del: #eb5757;
+  --del-bg: rgba(235, 87, 87, 0.13);
+  --warn: #d4a355;
+  --warn-bg: rgba(212, 163, 85, 0.12);
+  --radius: 6px;
+  --radius-lg: 8px;
+  --row: 32px;
+  --dur: 150ms;
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --mono: ui-monospace, "Geist Mono", "Cascadia Code", "SF Mono", Consolas, monospace;
+  --sans: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+/* Light is the alternate, not the default — the opposite of most systems. */
+:root[data-theme='light'] {
+  color-scheme: light;
+  --bg: #fbfbfc;
+  --panel: #fff;
+  --panel-2: #f4f4f6;
+  --border: #e6e6ea;
+  --border-strong: #d3d4da;
+  --text: #16171b;
+  --muted: #6f7682;
+  --accent: #5e6ad2;
+  --accent-fg: #fff;
+  --accent-soft: rgba(94, 106, 210, 0.09);
+  --add: #1a7f4b;
+  --add-bg: rgba(26, 127, 75, 0.08);
+  --del: #b4232a;
+  --del-bg: rgba(180, 35, 42, 0.07);
+  --warn: #8a5a00;
+  --warn-bg: rgba(138, 90, 0, 0.08);
+}
+
+* { box-sizing: border-box; }
+
+html, body, #root { height: 100%; margin: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font: 13px/1.5 var(--sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+button, input, select, textarea { font: inherit; color: inherit; }
+
+input[type='checkbox'] { accent-color: var(--accent); }
+
+/* Scrollbars are chrome, not content: they take the hairline color instead of
+   the platform default, which is near-white and reads as a hole in the dark
+   theme. WebKit pseudo-elements only — setting `scrollbar-color` as well makes
+   Chrome fall back to painting the platform scrollbar, which ignores the token.
+   Firefox would keep its default; this app ships as a local Chrome/Edge page. */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border: 3px solid transparent;
+  background-clip: padding-box;
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover { background: var(--muted); background-clip: padding-box; }
+::-webkit-scrollbar-corner { background: transparent; }
+
+/* ── frame ───────────────────────────────────────────── */
+
+.app { display: flex; flex-direction: row; height: 100%; }
+
+/* The rail: the windows this app opens, down the left edge, the way an activity
+   bar reads — always in the same place, never scrolled away with the panes. */
+.rail {
+  flex: none; display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 9px 0; background: var(--panel-2); overflow: hidden;
+}
+.rail .btn.icon { width: 34px; height: 30px; }
+/* The rail's rows are destinations, so the one you are standing on says so.
+   Same tint as the selected segment: there is only ever one of these too. */
+.rail .btn.icon.on { background: var(--accent-soft); color: var(--text); }
+
+/* Widened: the rows become a list, so they take the width and name themselves.
+   The name is never in the way at the narrow width — that is the whole point of
+   a rail — so it is hidden rather than truncated. */
+.rail-label { display: none; flex: none; }
+.rail[data-label='on'] { align-items: stretch; padding: 9px 6px; }
+.rail[data-label='on'] .btn.icon {
+  width: 100%; padding: 0 10px; justify-content: flex-start; gap: 8px;
+}
+.rail[data-label='on'] .rail-label { display: inline; overflow: hidden; text-overflow: ellipsis; }
+
+.main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+
+.topbar {
+  display: flex; align-items: center; gap: 8px; flex: none;
+  height: 48px; padding: 0 16px; border-bottom: 1px solid var(--border);
+}
+.brand { font-weight: 600; letter-spacing: -0.011em; white-space: nowrap; }
+.brand span { color: var(--muted); font-weight: 400; }
+.grow { flex: 1; }
+
+/* The context figure. One bar carrying two numbers: the fill is what this
+   profile loads, the hatched tail is what it leaves behind — the same bar
+   spans everything the inventory could load, so a toggle moves the edge
+   between them. The flash on change (up = grew, down = shrank) is there
+   because a number that changes silently reads as unchanged. */
+.ctx {
+  display: flex; align-items: center; gap: 8px; flex: none;
+  padding: 3px 8px; border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--panel-2); font-size: 11px; white-space: nowrap;
+  transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease);
+}
+.ctx-label {
+  color: var(--muted); font-size: 10px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.06em;
+}
+.ctx-track {
+  position: relative; display: block; width: 84px; height: 6px;
+  border-radius: 3px; background: var(--border); overflow: hidden;
+}
+.ctx-fill {
+  position: absolute; inset: 0 auto 0 0; background: var(--accent);
+  transition: width var(--dur) var(--ease);
+}
+/* What the profile leaves behind. Hatched rather than tinted: it is not a
+   second measurement, it is room the fill gave up, and the hatching says so
+   without a legend. */
+.ctx-ghost {
+  position: absolute; top: 0; bottom: 0;
+  background: repeating-linear-gradient(
+    135deg, var(--border-strong) 0 3px, transparent 3px 6px
+  );
+  transition: left var(--dur) var(--ease);
+}
+.ctx-num { font-variant-numeric: tabular-nums; }
+.ctx-pct { color: var(--muted); font-variant-numeric: tabular-nums; }
+.ctx-delta { color: var(--add); font-variant-numeric: tabular-nums; }
+.ctx.up { background: var(--warn-bg); border-color: var(--warn); }
+.ctx.up .ctx-fill { background: var(--warn); }
+.ctx.down { background: var(--add-bg); border-color: var(--add); }
+.ctx.down .ctx-num, .ctx.down .ctx-delta { color: var(--add); }
+
+/* The one line that answers whatever was just pressed. It sits under the topbar
+   because the actions are spread across three panes and the answer used to land
+   in the third one regardless of where the click was — Save profile reported two
+   panes away from itself. Rendered only when there is something to say. */
+.statusbar {
+  flex: none; display: flex; align-items: center; gap: 8px;
+  padding: 7px 16px; font-size: 12px;
+  background: var(--panel-2); border-bottom: 1px solid var(--border);
+}
+
+/* `display: grid` below beats the UA's `[hidden] { display: none }`, so hiding the
+   strip from App would leave it in the flow and split the height with the page. */
+.cols[hidden] { display: none; }
+
+.cols {
+  flex: 1; display: grid; gap: 0;
+  /* Columns are set inline from state — the widths belong to the user. */
+  grid-template-columns: minmax(260px, 1fr) 4px minmax(300px, 1.1fr) 4px minmax(320px, 1fr);
+  /* The three minimums add up to more than a narrow window. Hiding the overflow
+     took the third pane off the screen with no way to reach it — no scrollbar,
+     and a drag clamps against the window it is already inside. Below the
+     minimums the strip scrolls; App re-clamps the widths above them on resize. */
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+.pane { display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+
+/* The divider is the drag handle: 4px of grab area around a 1px hairline. */
+/* The two inside the column strip are sized by their grid track; the rail's sits
+   in the outer row, where nothing else gives it width. */
+.handle { position: relative; cursor: col-resize; touch-action: none; }
+.rail + .handle { flex: none; width: 4px; }
+.handle::before {
+  content: ''; position: absolute; top: 0; bottom: 0; left: 50%;
+  width: 1px; background: var(--border);
+}
+.handle:hover, .handle:focus-visible { background: var(--accent-soft); outline: none; }
+
+.pane-head {
+  display: flex; align-items: center; gap: 8px; flex: none;
+  height: 36px; padding: 0 16px; border-bottom: 1px solid var(--border);
+  font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--muted); font-weight: 600;
+}
+.pane-body { flex: 1; overflow: auto; padding: 4px 0; }
+.pane-foot {
+  flex: none; display: flex; align-items: center; gap: 8px;
+  padding: 12px 16px; border-top: 1px solid var(--border);
+}
+
+/* ── fields ───────────────────────────────────────────── */
+
+/* `anchor-scope` keeps each badge's `--hint` name local to its own field: without
+   it every hint on the page shares one name and they all anchor to the last. */
+.field { display: flex; align-items: center; gap: 10px; min-height: var(--row); padding: 2px 16px; anchor-scope: --hint; }
+/* Only the caption column: a checkbox inside the value is a label too, and
+   styling every `label` turns control text into a shouting caption. */
+.field > label:first-child {
+  display: flex; align-items: center; gap: 6px;
+  color: var(--muted); width: 104px; flex: none;
+  font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em;
+}
+.field.stack { flex-direction: column; align-items: stretch; }
+.field.stack > label:first-child { width: auto; margin-bottom: 6px; }
+.field label { cursor: pointer; }
+
+/* A caption explains nothing by itself: the explanation lives behind this badge.
+   Caption styles are uppercase, so reset them here. The text is a popover, which
+   puts it in the top layer — no scroller can clip a hint open near a pane edge.
+   Every badge shares one anchor name, so `.field` scopes it (`anchor-scope`):
+   without that the name resolves to the last badge on the page and every hint
+   opens in the same wrong spot. The popover's implicit anchor did not work. */
+.hint {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 13px; height: 13px; padding: 0; flex: none; border-radius: 50%;
+  border: 1px solid var(--border-strong); background: none; color: var(--muted);
+  font-size: 9px; font-weight: 600; letter-spacing: normal; text-transform: none;
+  cursor: pointer; anchor-name: --hint;
+}
+.hint:hover, .hint:focus-visible { color: var(--text); border-color: var(--accent); outline: none; }
+
+.hint-pop {
+  position: absolute; position-anchor: --hint;
+  top: anchor(bottom); left: anchor(left); right: auto; bottom: auto;
+  position-try-fallbacks: flip-block, flip-inline;
+  width: 250px; margin: 6px 0 0; padding: 9px 10px;
+  background: var(--panel); border: 1px solid var(--border-strong);
+  border-radius: var(--radius); color: var(--text);
+  font-size: 11.5px; line-height: 1.5; letter-spacing: normal; text-transform: none;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+.input, select.input {
+  flex: 1; min-width: 0; height: 30px; padding: 0 9px;
+  background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius);
+  font-family: var(--mono); font-size: 12px;
+  transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+}
+.input:focus, select.input:focus {
+  outline: none; border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent);
+}
+
+textarea.input { width: 100%; height: auto; min-height: 96px; padding: 8px 9px; resize: vertical; line-height: 1.5; }
+
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  height: 30px; padding: 0 12px; flex: none; white-space: nowrap;
+  border: 1px solid var(--border); border-radius: var(--radius);
+  background: transparent; cursor: pointer;
+  transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+.btn:hover:not(:disabled) { background: var(--panel-2); border-color: var(--border-strong); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); font-weight: 500; }
+.btn.primary:hover:not(:disabled) { filter: brightness(1.1); }
+.btn.danger:hover:not(:disabled) { border-color: var(--del); color: var(--del); }
+/* Armed: the next click does the irreversible thing. It has to read as a
+   different button before the pointer arrives, not on hover. */
+.btn.armed { border-color: var(--del); color: var(--del); }
+.btn.icon { width: 30px; padding: 0; color: var(--muted); }
+.btn.icon:hover:not(:disabled) { color: var(--text); }
+.btn:disabled { opacity: 0.45; cursor: default; }
+/* `⚡` and `☾` fell back to Segoe UI Emoji and came out in colour; these are the
+   paths that replaced them. Block so the glyph sits on the button's centre line. */
+.btn svg { display: block; }
+
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; flex: none; }
+.seg button {
+  border: none; background: transparent; height: 28px; padding: 0 12px;
+  cursor: pointer; color: var(--muted); font-size: 12px;
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+.seg button + button { border-left: 1px solid var(--border); }
+.seg button:hover { color: var(--text); }
+.seg button[data-on='true'] { background: var(--accent); color: var(--accent-fg); }
+
+/* ── inventory ───────────────────────────────────────── */
+
+/* Sticky: the pane is one scroller, and a group opened to ninety rows used to
+   carry its own heading off the top — leaving no way to tell which group the
+   rows under the cursor belong to. */
+.group-title {
+  position: sticky; top: 0; z-index: 1;
+  display: flex; justify-content: space-between; align-items: baseline;
+  width: 100%; padding: 16px 16px 5px;
+  background: var(--bg); border: 0; text-align: left; cursor: pointer;
+  font-size: 11px; font-weight: 600; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--muted);
+  transition: color var(--dur) var(--ease);
+}
+.group-title:hover { color: var(--text); }
+.group-title:focus-visible { outline: none; color: var(--text); }
+.group-title > span:last-child { font-variant-numeric: tabular-nums; }
+.group-title .caret { display: inline-block; width: 12px; }
+
+.row {
+  display: flex; align-items: center; gap: 8px;
+  min-height: var(--row); padding: 3px 16px; cursor: default;
+  transition: background var(--dur) var(--ease);
+}
+.row.click { cursor: pointer; }
+/* The color alone, never the `background` shorthand: the shorthand would wipe the
+   share fill a row behind a table draws with `background-image`, and the bar would
+   vanish on hover. */
+.row.click:hover { background-color: var(--accent-soft); }
+/* Keyboard reaches these rows now, so the focus has to be as visible as hover. */
+.row.click:focus-visible {
+  outline: none; background-color: var(--accent-soft);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+.row .colname { flex: 1; min-width: 0; }
+.row .name { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row .src {
+  color: var(--muted); font-size: 11px; font-family: var(--mono);
+  font-variant-numeric: tabular-nums; flex: none;
+}
+.row.off .name, .row.strike .name { color: var(--muted); text-decoration: line-through; }
+/* A decision made in the profile that the files do not carry yet. Quiet: it is
+   the state of the draft, not a warning. */
+.row .src.changed { color: var(--accent); text-transform: lowercase; }
+/* The one thing in a row that leaves the app. It has to look like a link and not
+   like the muted label beside it, or nobody finds it. */
+.row .rowlink { color: var(--accent); text-decoration: none; flex: none; font-size: 12px; }
+.row .rowlink:hover { text-decoration: underline; }
+
+/* A heading inside the inventory, not a group of its own. It must not stick:
+   `.group-title` pins to the top of the scroller, and two sticky headings in one
+   list end up on top of each other. */
+.sub-title {
+  padding: 10px 16px 2px;
+  font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* Smaller than a standalone `.seg`: this one sits inside a 32px row, next to the
+   name and the source it belongs to. */
+/* The three-way control wants ~200px of its own, and the inventory starts at its
+   260px minimum — where the name would be crushed to nothing. So every row gives
+   the control a line of its own. `100%` and not the natural wrap: the wrap broke
+   wherever the row happened to also carry a scope or an «изменено» badge, and the
+   rows that carried one dropped their buttons 18px lower than the rows that did
+   not — nine rows of the twenty-eight at the default pane width. */
+.row.perm { flex-wrap: wrap; row-gap: 4px; }
+/* Basis `0`, not `auto`: a wrapped line breaks on the item's own width before
+   anything shrinks, so an `auto` name would push the «изменено» badge onto the
+   rows below and add a line to exactly the rows that carried one. */
+.row.perm .colname { flex: 1 1 0; min-width: 0; }
+.row.perm .seg { flex: 0 0 100%; }
+.row .seg button { height: 22px; padding: 0 8px; font-size: 10.5px; }
+/* The colour repeats the word already on the button, so the state reads before
+   the label does — and only the two states that write something get one. */
+.row .seg button[data-on='true'][data-k='deny'] { background: var(--del); color: #fff; }
+.row .seg button[data-on='true'][data-k='ask'] { background: var(--warn); color: #17130a; }
+
+/* Second line of a row: what the entity takes up. No description — no line. */
+.desc {
+  color: var(--muted); font-size: 11px; line-height: 1.35;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+/* A second line that is a state, not a description: the same slot as every other
+   row's description, but this one says the thing will not load. */
+.desc.off { color: var(--warn); }
+
+.catq { display: flex; gap: 8px; padding: 0 16px 8px; }
+.catq .input { min-width: 0; }
+.catq .input:first-child, .catq .seg + .input { flex: 1; }
+.catq select.input { width: 92px; flex: none; }
+.catq .seg { flex: none; }
+
+.chip {
+  flex: none; font-family: var(--mono); font-size: 10.5px; line-height: 1;
+  padding: 3px 6px; border: 1px solid var(--border); border-radius: 999px;
+  color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums;
+}
+.chip.measured { color: var(--text); border-color: var(--border-strong); background: var(--panel-2); }
+/* Quiet, but not faded: at 10.5px the muted token is already near the contrast
+   floor, and 70% opacity of it put the "no measurement" chip under it. */
+.chip.unknown { border-style: dotted; }
+.chip.origin { border-style: dashed; }
+/* The session's own count: the one figure here that is not somebody's estimate.
+   Marked with the accent so it cannot be confused with our ≈/~ arithmetic. */
+.chip.session { color: var(--text); border-color: transparent; background: var(--accent-soft); }
+/* A registry server whose connection needs a secret the author does not ship.
+   Not an error and not a measurement — the one thing here that costs the human
+   a trip to get a token before the server is of any use. */
+.chip.secret { color: var(--warn); border-color: var(--warn); }
+
+.muted { color: var(--muted); }
+
+/* A figure that only explains another figure: the pane head's base and delta.
+   Same mono as the number it belongs to, quieter, and not shouting uppercase. */
+.tiny {
+  font-family: var(--mono); font-size: 10.5px; color: var(--muted);
+  text-transform: none; letter-spacing: 0; font-variant-numeric: tabular-nums;
+}
+.mono { font-family: var(--mono); font-size: 12px; }
+
+.note {
+  margin: 8px 16px; padding: 9px 11px; border-radius: var(--radius);
+  background: var(--warn-bg); color: var(--warn); font-size: 12px;
+  border: 1px solid transparent;
+}
+.note.warn { border-color: var(--del); color: var(--del); }
+.note .cmd { margin: 6px 0 0; font-size: 11px; }
+
+.empty { padding: 24px 16px; color: var(--muted); text-align: center; font-size: 12px; }
+
+/* ── result ───────────────────────────────────────────── */
+
+.diff { font-family: var(--mono); font-size: 11.5px; line-height: 1.65; padding: 0 16px; }
+.diff div { padding: 0 8px; border-radius: 3px; white-space: pre-wrap; word-break: break-word; }
+.diff .add { background: var(--add-bg); color: var(--add); }
+.diff .del { background: var(--del-bg); color: var(--del); }
+/* Context lines: present so the file reads as a file, muted so they step back. */
+.diff .same { color: var(--muted); }
+
+pre.cmd {
+  margin: 0; padding: 11px 12px; background: var(--panel-2);
+  border: 1px solid var(--border); border-radius: var(--radius);
+  font-family: var(--mono); font-size: 11.5px; line-height: 1.6;
+  white-space: pre-wrap; word-break: break-all; max-height: 220px; overflow: auto;
+}
+pre.cmd.small { font-size: 11px; }
+
+/* The settings themselves, as the file they become. One block, no chrome: the
+   pane's subject is this text, and anything drawn around it is a second reading
+   of the same thing. */
+pre.json {
+  margin: 0; padding: 10px 16px; font-family: var(--mono); font-size: 11.5px;
+  line-height: 1.6; white-space: pre-wrap; word-break: break-word; color: var(--text);
+}
+
+/* The launch command folded away: it is what the configuration turns into, not
+   the configuration itself, so it waits behind one click. */
+.fold { margin: 12px 16px 0; }
+.fold > summary {
+  cursor: pointer; font-size: 11px; font-weight: 600;
+  letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted);
+  transition: color var(--dur) var(--ease);
+}
+.fold > summary:hover { color: var(--text); }
+.fold > summary:focus-visible { outline: none; color: var(--text); }
+
+.stack-gap { display: flex; flex-direction: column; gap: 10px; }
+.row-gap { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+/* ── command palette (⌘K) ─────────────────────────────── */
+
+.scrim {
+  position: fixed; inset: 0; z-index: 20;
+  background: rgba(0, 0, 0, 0.45); backdrop-filter: blur(3px);
+  display: grid; place-items: start center; padding-top: 14vh;
+}
+
+.palette {
+  width: 560px; max-width: 92vw;
+  background: var(--panel); border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg); overflow: hidden;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+}
+.palette-input {
+  width: 100%; height: 46px; padding: 0 16px;
+  border: none; border-bottom: 1px solid var(--border);
+  background: transparent; font-size: 14px;
+}
+.palette-input:focus { outline: none; }
+.palette-list { padding: 6px; max-height: 320px; overflow: auto; }
+.palette-row {
+  display: flex; align-items: center; gap: 10px; height: 38px; padding: 0 10px;
+  border-radius: var(--radius); cursor: pointer;
+}
+.palette-row:hover { background: var(--panel-2); }
+.palette-row[data-sel='true'] { background: var(--panel-2); box-shadow: inset 2px 0 0 var(--accent); }
+.palette-row .kind {
+  color: var(--muted); font-size: 11px; width: 104px; flex: none;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.palette-row .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.palette-foot {
+  display: flex; gap: 14px; padding: 9px 14px;
+  border-top: 1px solid var(--border); color: var(--muted); font-size: 11px;
+}
+kbd {
+  font-family: var(--mono); font-size: 10px; padding: 2px 5px;
+  border: 1px solid var(--border-strong); border-radius: 4px; color: var(--muted);
+}
+
+/* ── catalog window ───────────────────────────────────── */
+
+.catalog {
+  width: min(1180px, 94vw); max-height: 82vh;
+  display: flex; flex-direction: column; min-height: 0;
+  background: var(--panel); border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg); overflow: hidden;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+}
+/* Same shell, one column: a card opened from the inventory. */
+.catalog.only { width: min(760px, 92vw); }
+
+/* The catalogue and the history as destinations rather than windows: the same
+   shell, with the window taken off it — no box, no shadow, no rounded corners,
+   filling the area under the topbar and scrolling inside itself. Its head lines
+   up with the statistics page's, so all four destinations start the same way. */
+.catalog.view {
+  flex: 1; min-height: 0;
+  width: auto; max-height: none;
+  background: transparent; border: 0; border-radius: 0; box-shadow: none;
+}
+.catalog.view > .catalog-head { padding: 10px 20px; }
+
+.catalog-head {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 12px; border-bottom: 1px solid var(--border);
+}
+.catalog-head .brand {
+  flex: none; font-size: 11px; font-weight: 600; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--muted);
+}
+/* The window names itself, and the name is one line even when the rail is too
+   narrow to carry it. */
+.catalog-head .page-title { flex: none; white-space: nowrap; }
+.catalog-head .input { flex: 1; min-width: 0; }
+.catalog-head select.input { width: 116px; flex: none; }
+
+.catalog-body { flex: 1; display: flex; min-height: 0; }
+.catalog-list { flex: 1; min-width: 0; overflow: auto; padding: 4px 0; }
+/* The registries' list has its own inset so the table stands off the window's edges,
+   the way the statistics page's blocks do. The history's list keeps the plain one. */
+.cat-list { padding: 4px 20px 20px; }
+.cat-list .note { margin: 8px 0; }
+.cat-list .cat-more { padding: 8px 0; }
+
+/* A registry as a table: a head that names the columns once, one grid per row so a
+   figure read down is a column and not a coincidence, and a rule between the rows —
+   thirty entries with nothing dividing them are a pile, not a list. */
+.cat-table {
+  background: var(--panel-2);
+  border: 1px solid var(--border); border-radius: var(--radius);
+  /* `clip`, not `hidden`: the same reason as `.stats-block` — a head inside a scroll
+     container of its own would stick to a box that never scrolls. */
+  overflow: clip;
+}
+/* name · repository · stars · button. The tracks are fixed but for the name, so
+   the same template resolves to the same widths on the head and on every row. */
+.cat-table .cat-head,
+.cat-table .row {
+  display: grid; align-items: center; gap: 10px;
+  grid-template-columns: minmax(0, 1fr) 190px 62px 104px;
+}
+/* The registry carries transports where the index carries a rating, and nothing
+   installs from it — so four tracks instead of five. */
+.cat-table.mcp .cat-head,
+.cat-table.mcp .row { grid-template-columns: minmax(0, 1fr) 190px 140px 104px; }
+.cat-table .cat-head {
+  min-height: 28px; padding: 0 12px;
+  /* `-4px` is the list's own top padding, which the scrolling rows are drawn through:
+     pinned at 0 the head would leave a strip of half-scrolled rows above itself. */
+  position: sticky; top: -4px; z-index: 1;
+  background: var(--panel-2); border-bottom: 1px solid var(--border);
+  color: var(--muted); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em;
+}
+.cat-table .row {
+  min-height: 38px; padding: 7px 12px; border-top: 1px solid var(--border);
+}
+/* The head already closes the top of the table. */
+.cat-table .cat-head + .row { border-top: 0; }
+.cat-table .cat-num {
+  text-align: right; color: var(--muted);
+  font-family: var(--mono); font-size: 11px; font-variant-numeric: tabular-nums;
+}
+.cat-table .cat-repo {
+  display: flex; align-items: center; gap: 6px; min-width: 0;
+  color: var(--muted); font-family: var(--mono); font-size: 11px;
+}
+.cat-table .cat-repo-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cat-table .cat-cell { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.cat-table .cat-act { display: flex; align-items: center; justify-self: end; }
+
+.catalog-foot { max-height: 42%; overflow: auto; border-top: 1px solid var(--border); }
+.catalog-foot .note { margin: 8px 12px; }
+
+.catalog-pager {
+  display: flex; align-items: center; justify-content: center; gap: 12px;
+  padding: 8px 12px; border-top: 1px solid var(--border);
+  font-size: 11.5px; font-variant-numeric: tabular-nums;
+}
+
+/* ── detail card ──────────────────────────────────────── */
+
+.card {
+  flex: none; width: 400px; min-height: 0;
+  display: flex; flex-direction: column;
+  border-left: 1px solid var(--border);
+}
+.catalog.only .card { flex: 1; width: auto; border-left: 0; }
+
+.card-head {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 12px; border-bottom: 1px solid var(--border);
+}
+.card-head .mono { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.card-body { flex: 1; overflow: auto; padding: 12px; }
+
+.card-label {
+  font-size: 11px; font-weight: 600; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--muted); margin-top: 14px;
+}
+.card-body > .card-label:first-child { margin-top: 0; }
+
+.card-desc { margin: 5px 0 0; font-size: 12.5px; line-height: 1.55; }
+
+/* A README, rendered. Compact on purpose: it is the body of a card, not a page,
+   so every block sits close to the one above it and nothing shouts. */
+.md { margin-top: 6px; font-size: 12.5px; line-height: 1.6; }
+.md > :first-child { margin-top: 0; }
+.md h3, .md h4, .md h5, .md h6 {
+  margin: 14px 0 4px; font-size: 12.5px; font-weight: 600;
+  text-transform: none; letter-spacing: 0; color: var(--text);
+}
+.md h3 { font-size: 13.5px; }
+.md p { margin: 6px 0; }
+.md ul { margin: 6px 0; padding-left: 20px; }
+.md li { margin: 2px 0; }
+.md a { color: var(--accent); text-decoration: none; }
+.md a:hover { text-decoration: underline; }
+.md code {
+  font-family: var(--mono); font-size: 11.5px;
+  background: var(--panel-2); border: 1px solid var(--border);
+  border-radius: 4px; padding: 0 3px;
+}
+.md-code {
+  margin: 6px 0; padding: 10px 11px;
+  background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius);
+  font-family: var(--mono); font-size: 11.5px; line-height: 1.6;
+  white-space: pre-wrap; word-break: break-word; overflow: auto;
+}
+/* A wide table scrolls inside its own box: the card never drags sideways. */
+.md-table { margin: 6px 0; overflow-x: auto; }
+.md-table table { border-collapse: collapse; font-size: 12px; }
+.md-table th, .md-table td {
+  border: 1px solid var(--border); padding: 4px 8px; text-align: left; vertical-align: top;
+}
+.md-table th { background: var(--panel-2); font-weight: 600; white-space: nowrap; }
+
+.card-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+
+/* One MCP tool: the box that denies it, its own cost, and what it says it does.
+   The blurb hangs under the name, indented past the checkbox, so the column of
+   names stays scannable while the text stays attached to its tool. */
+.tool-row { display: block; }
+.tool-head { display: flex; align-items: center; gap: 7px; }
+.tool-row .desc { display: block; margin: 2px 0 0 21px; line-height: 1.5; }
+
+.card-field { display: flex; gap: 10px; font-size: 12px; }
+.card-field .card-label {
+  margin: 0; flex: none; width: 148px;
+  text-transform: none; letter-spacing: 0; font-size: 11.5px;
+}
+.card-field .card-value { min-width: 0; word-break: break-word; }
+
+.card-value a { color: var(--accent); text-decoration: none; }
+.card-value a:hover { text-decoration: underline; }
+
+.card-foot { padding: 10px 12px; border-top: 1px solid var(--border); }
+
+/* ── statistics page ──────────────────────────────────── */
+
+/* A destination of its own, not a window over the workspace: it takes the whole
+   area under the topbar and scrolls in there, so the three panes are gone while
+   you read it. See `StatsPage`. */
+/* Every pane that scrolls reserves the scrollbar's width whether or not one is
+   showing. Without it the content reflows sideways the moment a filter shortens
+   the page — and the whole screen appears to jump. */
+.pane-body, .catalog-list, .catalog-foot, .card-body, .page-body { scrollbar-gutter: stable; }
+
+.page { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.page-head {
+  flex: none; display: flex; align-items: center; gap: 10px;
+  padding: 10px 20px; border-bottom: 1px solid var(--border);
+}
+.page-title { font-size: 14px; font-weight: 600; }
+.page-body { flex: 1; min-height: 0; overflow: auto; padding: 14px 20px 28px; }
+
+/* The figures and the chart, held to the top of the page while the tables below them
+   scroll: picking a row down in a table is a look at what the figures do, and figures
+   that answer from off the screen answer nothing. Opaque, and not only for looks — the
+   rows pass under it, and without a background of its own they would show through the
+   gaps between the tiles and between the panels. `-14px` is the page body's own top
+   padding, so the slab comes to rest flush with the content and not a line lower. */
+.stats-pin { position: sticky; top: -14px; z-index: 2; background: var(--bg); }
+/* The chart has left the grid it used to share with the tables, and its gap with the
+   line above it went with the grid. */
+.stats-pin .stats-block { margin-top: 12px; }
+
+/* Seven figures, one tile each: the four token columns stay four tiles, because
+   a cache read is not priced like an input token. 130px is narrow enough that all
+   seven still fit one row on a laptop, and wide enough for `340 тыс.`. */
+.stats-tiles { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); }
+.stats-tile {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 10px 12px; background: var(--panel-2); border-radius: var(--radius);
+}
+.stats-num { font-family: var(--mono); font-size: 18px; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.stats-cap { color: var(--muted); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; }
+
+/* The line has a reserved height even when a pick leaves nothing to say about it:
+   an empty one would pull the whole grid up by its own line height, and that is the
+   jump this row is not allowed to cause. */
+.stats-meta { margin: 8px 0 0; min-height: 1.5em; color: var(--muted); font-size: 11.5px; }
+
+/* The cuts sit side by side — the page is wide, and a project table and a model
+   list are read against each other. */
+.page-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; align-items: start; }
+.stats-block {
+  min-width: 0; background: var(--panel-2);
+  /* `clip`, not `hidden`: both cut the corners to the radius, but `hidden` makes the
+     block a scroll container of its own, and a sticky column head inside one would
+     stick to a box that never scrolls. */
+  border: 1px solid var(--border); border-radius: var(--radius); overflow: clip;
+}
+.stats-block.wide { grid-column: 1 / -1; }
+.stats-block-head {
+  padding: 7px 12px; border-bottom: 1px solid var(--border);
+  color: var(--muted); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em;
+}
+/* The rows keep their rhythm but lose the block's outer inset. */
+.stats-block .row { padding-left: 12px; padding-right: 12px; }
+/* The row you picked. It is a mark and not a filter — the rows around it stay
+   exactly where they were. `--accent-soft` is the hover tint, so the two would be
+   indistinguishable: the pick gets the accent edge instead. */
+.row.sel { box-shadow: inset 2px 0 0 var(--accent); }
+
+/* The share of its table's total that this line holds, drawn behind it. The figures
+   keep their columns — the fill is the row's own background and moves nothing — and
+   the exact percentage sits in its own column beside them. The tint is the accent at
+   a fraction: `color-mix` and not a second hex, so the light theme tints with its own
+   accent instead of with the dark one. */
+.row.fill {
+  background-image: linear-gradient(
+    to right,
+    color-mix(in srgb, var(--accent) 14%, transparent) var(--fill, 0%),
+    transparent var(--fill, 0%)
+  );
+}
+
+/* One slot per day of the zero-filled window, no gaps, so a day with nothing in
+   it is drawn as the empty slot it is. The slot is a button and stretches the full
+   height — a zero-height bar would be a day you cannot click back out of. */
+.stats-bars { display: flex; align-items: flex-end; gap: 2px; height: 190px; padding: 12px 12px 0; }
+
+/* Quarter lines behind the bars: the plot's scale, so a bar reads as a figure and not
+   only as taller than its neighbour. The origin and the size are both the content box,
+   which is the plot itself — left on the padding box the lines would sit off the scale
+   by the height of the top inset, because the gradient percent would be of the whole
+   box and the bars of the part of it below the padding. */
+.stats-bars {
+  background-image: repeating-linear-gradient(to top, var(--border) 0 1px, transparent 1px 25%);
+  background-origin: content-box;
+  background-size: 100% 100%;
+}
+
+/* The top of that scale, put where an axis puts it: over the ceiling of the tallest
+   bar, on the right, where a reader looks for the last tick of a vertical axis. */
+.stats-peak {
+  padding: 8px 12px 0; text-align: right; color: var(--muted);
+  font-family: var(--mono); font-size: 10.5px; font-variant-numeric: tabular-nums;
+}
+.stats-slot {
+  flex: 1 1 0; min-width: 2px; height: 100%; padding: 0; border: 0; background: none;
+  display: flex; align-items: flex-end; cursor: pointer;
+}
+.stats-slot:hover .stats-bar { background: var(--border-strong); }
+.stats-slot[data-on='true'] .stats-bar { background: var(--text); }
+.stats-bar { width: 100%; background: var(--accent); border-radius: 2px 2px 0 0; }
+/* The date under each bar. A second flex row with the bars' own slack (`flex: 1 1 0`
+   and the same gap and side padding), so a label lands under the bar it names
+   without a grid to keep the two in step. One line, never wrapped: a label that
+   wraps is a label a line taller than its neighbours, and the row comes out ragged. */
+.stats-days {
+  display: flex; gap: 2px; padding: 4px 12px 0;
+  color: var(--muted); font-size: 10px; line-height: 1.3;
+  font-variant-numeric: tabular-nums;
+}
+.stats-days span {
+  flex: 1 1 0; min-width: 2px; text-align: center;
+  overflow: hidden; white-space: nowrap;
+}
+.stats-axis {
+  display: flex; justify-content: space-between; gap: 8px;
+  padding: 5px 12px 10px; color: var(--muted); font-size: 11px;
+}
+
+/* A path is long and its tail is the part that names the project, so the
+   overflow is clipped from the left; the whole path stays in the tooltip. */
+.stats-path { direction: rtl; unicode-bidi: plaintext; text-align: left; }
+
+/* A column header inside the table's rows: same rhythm as `.row`, quieter and
+   not uppercased twice — its cells take the row's own mono and drop the caps. */
+.stats-head {
+  min-height: 24px; color: var(--muted); font-size: 10.5px;
+  text-transform: uppercase; letter-spacing: 0.06em;
+  /* A column of figures is read down, and a column whose head has scrolled off the
+     screen is a column read blind. The head is opaque so the rows pass behind it.
+     `-14px` is the page body's own top padding, which the scrolling rows are drawn
+     through: pinned at 0 the head would leave a strip of half-scrolled rows above
+     itself, and the column titles would look like one more row. `--pin-h` is the slab
+     above it: the head stops under the pinned figures instead of sliding behind them,
+     and is 0 on a page without a slab. */
+  position: sticky; top: calc(-14px + var(--pin-h, 0px)); z-index: 1; background: var(--panel-2);
+}
+.stats-head .src { font-family: var(--sans); font-size: 10.5px; text-transform: inherit; letter-spacing: inherit; }
+
+/* The usage tables' figure columns: a fixed width and the right edge, on the header
+   cells and the rows alike. Left to their own width, `16` and `1` start at a different
+   x on every line and the column reads as a list; the date column is the worst of them,
+   `8 окт. 2026 г.` being twice `1 сент. 2026 г.`. The name column takes the slack, so
+   the figures stay put when a panel is resized. */
+.usage-num { width: 68px; text-align: right; }
+.usage-date { width: 112px; text-align: right; }
+/* The share column, on both pages' tables: narrow enough that `100 %` fits and that it
+   costs the name column nothing it cannot spare. Stretched over the fill, so the column
+   and the bar end at the same x and the two are read as one figure. */
+.stats-share { width: 46px; text-align: right; }
+
+.stats-more { padding: 6px 12px 9px; color: var(--muted); font-size: 11px; }
+.stats-note { padding: 4px 12px; color: var(--muted); font-size: 11.5px; line-height: 1.5; }
+.stats-note:last-child { padding-bottom: 10px; }
+
+/* ── optional modules ───────────────────────────────────────── */
+
+/* The catalog: module · tool · state · switch. One elastic track and three fixed,
+   so the switches line up down the column and a long module name cannot push the
+   row it sits in wider than the one below it. */
+.mod-table {
+  background: var(--panel-2);
+  border: 1px solid var(--border); border-radius: var(--radius);
+  overflow: clip;
+}
+.mod-table .mod-head,
+.mod-table .row {
+  display: grid; align-items: center; gap: 10px;
+  grid-template-columns: minmax(0, 1fr) 150px 76px 108px;
+}
+.mod-table .mod-head {
+  min-height: 28px; padding: 0 12px;
+  background: var(--panel-2); border-bottom: 1px solid var(--border);
+  color: var(--muted); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em;
+}
+.mod-table .row { min-height: 38px; padding: 7px 12px; border-top: 1px solid var(--border); }
+.mod-table .mod-head + .row { border-top: 0; }
+.mod-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mod-cell { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.mod-state { color: var(--muted); font-size: 11px; }
+.mod-act { display: flex; align-items: center; justify-self: end; }
+
+/* ── the knowledge base ─────────────────────────────────────── */
+
+/* A form row, then the list and the page side by side. The page body does not scroll
+   as a whole — each half rolls on its own, so a page of any length never carries the
+   list off the top. */
+.kb-body { overflow: hidden; display: flex; flex-direction: column; gap: 8px; padding-bottom: 10px; }
+.kb-body .note { margin: 0; }
+/* Three tracks, not two: the middle one is the drag handle. Its width lives inline
+   in the component, because the split belongs to the user, as the panes' does. */
+.kb {
+  flex: 1; min-height: 0;
+  display: grid;
+  border: 1px solid var(--border); border-radius: var(--radius); overflow: clip;
+}
+.kb-side { min-height: 0; overflow: auto; }
+.kb-search { display: flex; gap: 8px; margin: 4px 8px; }
+.kb-page { min-height: 0; overflow: auto; padding: 12px 18px 24px; }
+/* Pinned: a page of a thousand links used to carry its own name and figures off the
+   top, and the reader then had no way to tell which page was open.
+   `-12px` is the scroller's own top padding, the same correction `.kb-groups` makes. */
+.kb-page-head {
+  position: sticky; top: -12px; z-index: 1;
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 0 8px; margin: -12px 0 10px; border-bottom: 1px solid var(--border);
+  background: var(--bg);
+}
+/* The name first, then where it lives: the reader came for the page, not the path. */
+.kb-page-name { font-size: 13px; font-weight: 600; }
+.kb-page-head .src { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+
+/* ── the add dialog ─────────────────────────────────────────── */
+
+/* Narrower than the palette: two controls and a path, and a wide box would only
+   stretch the path across the screen. */
+.kb-modal { width: 460px; }
+.kb-modal-head, .kb-modal-foot {
+  display: flex; align-items: center; gap: 8px; padding: 10px 14px;
+}
+.kb-modal-head { border-bottom: 1px solid var(--border); }
+.kb-modal-foot { border-top: 1px solid var(--border); justify-content: flex-end; }
+.kb-modal-body { display: flex; flex-direction: column; gap: 10px; padding: 14px; }
+.kb-modal-body .note { margin: 0; }
+.kb-src { align-self: flex-start; }
+/* The two pickers, and the path they answered with. `min-height` keeps the row from
+   collapsing to nothing while nothing is picked yet. */
+.kb-pick { display: flex; align-items: center; gap: 8px; min-height: 32px; }
+.kb-pick .path {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-family: var(--mono); font-size: 11px;
+}
+/* The three groups sit above a scrolling list of a thousand pages: pinned, or a long
+   list of documents leaves nothing to switch with. `-4px` is the scroller's own top
+   padding, the same correction `.cat-head` makes. */
+.kb-groups {
+  position: sticky; top: -4px; z-index: 1; margin: 4px 8px;
+  background: var(--panel-2);
+}
+/* Which hundred of the list is on screen, and the only two ways to change it. */
+.kb-pager { display: flex; align-items: center; gap: 8px; margin: 4px 8px; }
+/* A `[[wiki link]]` inside a page: a button, because it opens the page beside this one
+   instead of leaving the window. A target nothing answers to stays as plain text. */
+.wikilink {
+  font: inherit; padding: 0; border: 0; background: none;
+  color: var(--accent); cursor: pointer;
+  text-decoration: underline dotted; text-underline-offset: 2px;
+}
+.wikilink.dead { color: var(--muted); cursor: default; text-decoration: none; }
+.kb-pager .tiny { flex: 1; text-align: center; }
+.kb-pager .btn { padding: 2px 10px; }

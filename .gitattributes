@@ -1,0 +1,24 @@
+# Normalize line endings in the repo, check out native on Windows.
+* text=auto
+
+# Source files are always LF in the repository.
+*.rs text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf
+*.mjs text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.toml text eol=lf
+*.html text eol=lf
+*.css text eol=lf
+
+# Windows-native scripts keep CRLF.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Binaries.
+*.png binary
+*.ico binary
+*.icns binary
+*.exe binary
+*.dll binary

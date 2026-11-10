@@ -1,0 +1,35 @@
+[package]
+name = "claude-lineup"
+version = "0.1.0"
+description = "Harness layout profiles for Claude Code: which MCP servers, plugins, skills, hooks and memory files a session loads. Desktop app, reads the real machine state."
+license = "MIT"
+edition = "2024"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+serde = { version = "1", features = ["derive"] }
+# preserve_order: JSON key order must survive read-modify-write of the user's
+# settings files — a reordered settings.json is churn in someone's project.
+serde_json = { version = "1", features = ["preserve_order"] }
+sha2 = "0.10"
+chrono = "0.4"
+rand = "0.8"
+# The only HTTP client in the app: the remote index, the MCP registry, raw.githubusercontent.
+# Default features off: the charset transcoding is dead weight — every endpoint speaks UTF-8.
+ureq = { version = "2", default-features = false, features = ["tls"] }
+# context-mode's own SQLite stores, read-only. Bundled: nothing to install on the machine.
+rusqlite = { version = "0.32", features = ["bundled"] }
+# Restore-point id bytes, straight from the OS CSPRNG.
+getrandom = "0.3"
+
+# A desktop binary ships whole: one unit, one linked LLVM pass, symbols and
+# panic-unwind tables stripped. ~3 MB off the installer for nothing in return.
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"

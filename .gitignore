@@ -1,0 +1,49 @@
+# deps
+node_modules/
+
+# build output
+dist/
+
+# runtime: generated launchers and saved profiles
+launchers/
+profiles/
+
+# runtime: caches (MCP measurements, external index answers)
+data/
+
+# stray process output
+*.output
+*.log
+
+# env overrides for config.ts
+.env
+.env.*
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# editors
+.idea/
+.vscode/
+
+# incremental typecheck artifacts
+*.tsbuildinfo
+
+# rust build
+src-tauri/target/
+
+# tauri generated IDE schemas (tauri-build output)
+src-tauri/gen/schemas/
+
+# graphify knowledge graph (regenerable: `graphify update .`)
+graphify-out/
+
+# serena tool state
+.serena/
+
+# personal notes, design specs and static mockups — not part of the public repo
+docs/
+mockups/
+.claude/
